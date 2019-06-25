@@ -4,15 +4,19 @@
 
 #define INFINITO 0x3f3f3f3f
 
-typedef struct node{
+typedef struct listar_caminho
+{
+    int* caminhos;
+    int ultimo;
+}listar_caminho;
 
-    struct node* next;
+
+typedef struct node{
     int i;
     int q;
 }node;
 
 typedef struct no{
-
     struct no* next;
     int v;
     int d;
@@ -25,6 +29,11 @@ typedef struct graf{
     struct no* adj;
     struct no* tail;
     int** estoque;
+    listar_caminho* antecessor;
+    int* q_estoque_vert;
+    int* calculados;
+    int* atualizado;
+    int** distancias;
     int size_v;
     int size_arest;
 }graf;
@@ -39,30 +48,6 @@ typedef struct heap{
     int total;
 }heap;
 
-void show_heap( heap* heap){
-    int i = 1,n = 1, resultado = 0;
-    printf("\n");
-
-    for( i = 1 ; i <= heap->total  ; i++){
-
-        printf(" |%d|V:%d|D:%d ",i,heap->vertis[i].v,heap->vertis[i].d);
-        n++;
-        if( n >= resultado){
-            
-            if( resultado == 0){
-                //printf("-%d-",resultado);
-                resultado = 2;
-            }else{
-                resultado = (resultado*resultado);
-            }
-            
-            n = 0;
-            printf("\n");
-        }  
-    }
-    printf("\n");
-}
-
 int get_pai(int n){
     return (int)(n/2);
 }
@@ -71,98 +56,111 @@ int get_filho(int n){
 	return (2*n);
 }
 
-heap* criar_heap(int v){
-    heap* h = (heap*)malloc(sizeof(heap));
-    h->vertis = (vertis*)malloc(v*sizeof(vertis));
-    h->total = 0;
+heap* criar_heap(){
+    heap* h     = (heap*)malloc(sizeof(heap));
+    h->vertis   = (vertis*)malloc(10000*sizeof(vertis));
+    h->total    = 0;
+    return h;
 }
 
-void swap(heap* heap, int ID1, int ID2){
-    vertis temp = heap->vertis[ID1];
-    heap->vertis[ID1] = heap->vertis[ID2];
-    heap->vertis[ID2] = temp;
+void swap(heap* heaps, int ID1, int ID2){
+    vertis temp           = heaps->vertis[  ID1 ];
+    heaps->vertis[  ID1 ] = heaps->vertis[  ID2 ];
+    heaps->vertis[  ID2 ] = temp;
 }
 
-int bubble_up(heap *heap, int ID){
-	int ID_Pai, Criterio;
-    if( ID == 1){
-        return ID;
-    }else{
+void bubble_up(heap *heaps, int ID){
+	int ID_Pai;
+    if( ID != 1){
         ID_Pai = get_pai(ID);
-        
-        if( heap->vertis[ID_Pai].d > heap->vertis[ID].d )
-        {   
-            swap( heap, ID, ID_Pai);
-            bubble_up(heap, ID_Pai);
+        if( heaps->vertis[ID_Pai].d > heaps->vertis[ID].d ){   
+            swap(       heaps, ID, ID_Pai);
+            bubble_up(  heaps, ID_Pai);
         }
     }
 }
 
-int Insert_heap( heap *heap, vertis v){
-    heap->total += 1;
-    heap->vertis[heap->total ] = v;
-    return bubble_up(heap, heap->total);
+void Insert_heap( heap *heaps, vertis v){
+    heaps->total                  += 1;
+    heaps->vertis[  heaps->total ] = v;
+    bubble_up(      heaps, heaps->total);
 }
 
-void bubble_down(heap *heap, int ID){
-    int ID_Filho1, ID_Filho2, min_ou_max_ID; 
-    ID_Filho1 = 2*ID;
-    ID_Filho2 = ID_Filho1 + 1;
-    if( ID*2 < heap->total   ){
-        if( heap->vertis[ID_Filho1].d > heap->vertis[ID_Filho2].d ){
-            min_ou_max_ID = ID_Filho2;
-        }else if( heap->vertis[ID_Filho1].d < heap->vertis[ID_Filho2].d ){
-            min_ou_max_ID = ID_Filho1;
-        }else if( heap->vertis[ID_Filho1].d == heap->vertis[ID_Filho2].d)
-        {
-            if( heap->vertis[ID_Filho1].v < heap->vertis[ID_Filho2].d){
-                min_ou_max_ID = ID_Filho2;
-            }else
-            {
-                min_ou_max_ID = ID_Filho1;
+void bubble_down(heap *heaps, int ID){
+    int ID_Filho1, ID_Filho2, min = 0; 
+    ID_Filho1                   = 2*ID;
+    ID_Filho2                   = ID_Filho1 + 1;
+    if( ID*2 < heaps->total   ){
+        if(         heaps->vertis[  ID_Filho1   ].d > heaps->vertis[    ID_Filho2   ].d ){
+            min       = ID_Filho2;
+        }else if(   heaps->vertis[  ID_Filho1   ].d < heaps->vertis[    ID_Filho2   ].d ){
+            min       = ID_Filho1;
+        }else if(   heaps->vertis[  ID_Filho1   ].d == heaps->vertis[   ID_Filho2   ].d){
+            if(     heaps->vertis[  ID_Filho1   ].v < heaps->vertis[    ID_Filho2   ].v){
+                min   = ID_Filho2;
+            }else{
+                min   = ID_Filho1;
             }
         }
-        swap( heap, ID, min_ou_max_ID);
-        bubble_down( heap, min_ou_max_ID );
-    }else if(ID < heap->total){
-        if( heap->vertis[1].d > heap->vertis[2].d ){
-            swap( heap, 1, 2);
+        if( heaps->vertis[  ID  ].d > heaps->vertis[    min ].d ){
+            swap(               heaps, ID, min);
+            bubble_down(        heaps, min );
+        }else if( heaps->vertis[    ID  ].d ==  heaps->vertis[   min ].d ){
+            if( heaps->vertis[      ID  ].v >   heaps->vertis[   min ].v){
+                swap(           heaps, ID, min);
+                bubble_down(    heaps, min );
+            }
+        }
+    }else if(ID*2 == heaps->total){
+        if( heaps->vertis[  ID   ].d > heaps->vertis[    ID*2   ].d ){
+            swap( heaps, ID, ID*2);
         }
     }
 }
 
-vertis min_heap( heap* heap){
-    int ID_Che;
+vertis min_heap( heap* heaps){
     vertis valor, min;
-    if( heap->total > 0 ){
-        min = heap->vertis[1];
-        heap->vertis[1] = heap->vertis[heap->total];
-        heap->vertis[heap->total] = valor;
-        heap->total -=1;
-        bubble_down(heap, 1);
+    if( heaps->total > 0 ){
+        min                                 = heaps->vertis[    1               ];// salvar para retornar min
+        heaps->vertis[  1               ]   = heaps->vertis[    heaps->total    ];
+        //heaps->vertis[  heaps->total    ]   = valor;//apagar
+        heaps->total--;
+        bubble_down(    heaps, 1    );
         return min;
+    }else{
+        return valor;
     }
 }
 
 no* cria_no(){
-    no* n = (no*)malloc(sizeof(no));
-    return n;
-}
-node* cria_node(){
-    node* n = (node*)malloc(sizeof(node));
+    no* n   = (no*)malloc(sizeof(no));
     return n;
 }
 
-graf* criar_grap(graf* g, int v){
-    g = (graf*)malloc(sizeof(graf));
-    g->adj = (no*)malloc(v*sizeof(no));
-    g->tail = (no*)malloc(v*sizeof(no));
+node* cria_lista(int t){
+    node* n = (node*)malloc(t*sizeof(node));
+    return n;
+}
+
+graf* criar_grap( int v){
+    graf* g                 = (graf*)malloc(sizeof(graf));
+    g->adj                  = (no*)malloc(v*sizeof(no));
+    g->tail                 = (no*)malloc(v*sizeof(no));
+    g->antecessor           = (listar_caminho*)malloc(v*sizeof(listar_caminho));
+    g->calculados           = (int*)malloc(v*sizeof(int));
+    g->atualizado           = (int*)malloc(v*sizeof(int));
+    g->distancias           = (int**)malloc(v*sizeof(int*));
     for( int i = 0 ; i < v ; i++){
-        g->adj[i].next = NULL;
-        g->tail[i].next = cria_no();
+        g->adj[i].next                  = NULL;
+        g->tail[i].next                 = cria_no();
+        g->antecessor[i].caminhos       = (int*)malloc(v*sizeof(int));
+        g->distancias[i]                = (int*)malloc(v*sizeof(int));
+        g->calculados[i]                = 0;
+        g->atualizado[i]                = 0;
     }
-    g->size_v = v;
-    g->size_arest= 0;
+    g->size_v               = v;
+    g->size_arest           = 0;
+    return g;
 }
 
 void add_arest(graf* g, int v1, int v2, int peso, int W){
@@ -173,213 +171,174 @@ void add_arest(graf* g, int v1, int v2, int peso, int W){
         aux1->v             = v2;
         aux1->d             = peso;
         aux1->w             = W;
-        //aux1->custo         = peso;
         aux1->custo         = (     peso*(  100 +   W   )   )/100;
         g->tail[v1].next    =  aux1;
         g->size_arest++;
-
     }else{
         aux1                = g->tail[v1].next;
         aux1->next          = cria_no();
         aux1->next->v       = v2;
         aux1->next->d       = peso;
         aux1->next->w       = W;
-        //aux1->next->custo   = peso;
         aux1->next->custo   = (     peso*(  100 +   W   )   )/100;
         g->tail[v1].next    =  aux1->next;
     }
-    
 }
 
-void show_grafro(graf* g){
-    no* cur;
-
-    for(int i = 0 ; i < g->size_v ; i++){
-        if( g->adj[i].next != NULL){
-            cur = g->adj[i].next ;
-        }
-        printf("|%d|",i);
-        while ( cur != NULL)
-        {
-            printf("--%d-->|%d|",cur->custo,cur->v);
-            cur = cur->next;
-        }
-        printf("\n");
-    }
-}
-
-int dikst(graf* g, int inicio, int M, node* pedidos){
-
-    heap* heap = criar_heap(g->size_v);
-    vertis aux, v_atual, v_adj;
-    no* cur = g->adj[inicio].next;
-    int mark[g->size_v], custo, dist[g->size_v], comparado[g->size_v], cur_caminho = 0, comparador = INFINITO;
-    int anterior[g->size_v];
+void dikst(graf* g, int inicio, int M, node* pedidos, int q_produtos){
+    int index = 0;
+    heap* heaps = criar_heap();
+    vertis v_atual, v_adj;
+    int comparador = INFINITO, custo, cursor;
+    int mark_visit[     g->size_v   ];
+    int mark_comparado[ g->size_v   ];
     for (int i = 0; i < g->size_v; i++){
-        dist[i]         = INFINITO;
-        mark[i]         = 0;
-        comparado[i]      = 0;
-        anterior[i]     = -1;
+        g->distancias[inicio][i]                    = INFINITO;
+        mark_visit[i]                               = 0;
+        mark_comparado[i]                           = 0;
+        g->antecessor[inicio].caminhos[i]           = -1;
     }
-    dist[inicio]        = 0;
-    v_atual.v           = inicio;
-    v_atual.d           = 0;
-    //printf("\nInicio %d\n",inicio);
-    Insert_heap(heap, v_atual );
-    while (heap->total > 0 )
-    {
-        v_atual = min_heap(heap);
-        //printf("\n\t\t\t Saio da Heap:%d anterior %d\n",v_atual.v,anterior[v_atual.v]);
-        if( mark[v_atual.v] == 0 ){
-            mark[v_atual.v]     = 1;
-
-            if( comparado[v_atual.v] != 1 ){
-                comparador = M;
-                for( node* i = pedidos ; i != NULL && comparador > 0 && g->estoque[v_atual.v][i->i] >= i->q  ; i = i->next){
-                    //printf("|%d|%d-%d ",comparador,g->estoque[v_atual.v][i->i] , i->q);
-                    comparador--;
+    g->distancias[inicio][inicio]                   = 0;
+    v_atual.v                                       = inicio;
+    v_atual.d                                       = 0;
+    Insert_heap(heaps, v_atual );
+    while (heaps->total > 0 ){
+        v_atual = min_heap(heaps);
+        if( mark_visit[v_atual.v] == 0 ){
+            mark_visit[v_atual.v]     = 1;
+            if( mark_comparado[v_atual.v] != 1 ){
+                comparador          = M;
+                if( g->q_estoque_vert[v_atual.v] >= q_produtos){
+                    for(     register int i = 0 ; i < M && comparador > 0 && g->estoque[    v_atual.v   ][  pedidos[i].i    ] >= pedidos[i].q  ; i++){
+                        comparador--;
+                    }
                 }
-                comparado[v_atual.v] = 1;
-                //printf("Caminho ADD %d D:%d\n",v_atual.v,dist[ v_atual.v]  );
+                mark_comparado[v_atual.v] = 1;
                 if( comparador == 0){
                     // atualizar estoque
-                    comparador = M;
-                    for( node* j = pedidos ; j != NULL && comparador > 0 && g->estoque[v_atual.v][j->i] >= j->q  ; j = j->next){
-                        g->estoque[v_atual.v][j->i] = g->estoque[v_atual.v][j->i] - j->q ;
+                    comparador  = M;
+                    for( register int i = 0 ; i < M && comparador > 0 && g->estoque[    v_atual.v   ][  pedidos[i].i    ] >= pedidos[i].q  ; i++){
+                        comparador--;
+                        g->estoque[v_atual.v][pedidos[i].i] -= pedidos[i].q;
                     }
+                    g->q_estoque_vert[v_atual.v]   -= q_produtos;
                     printf("%d ",v_atual.v);
-                    int cursor = v_atual.v;
-                    while (anterior[cursor] != -1){
-                        printf("%d ",anterior[cursor]);
-                        cursor = anterior[cursor];
+                    cursor                          = v_atual.v;
+                    while (g->antecessor[inicio].caminhos[cursor] != -1){
+                        printf("%d ",g->antecessor[inicio].caminhos[cursor]);
+                        cursor                          = g->antecessor[inicio].caminhos[cursor];
                     }
-                    printf("%d\n",dist[ v_atual.v]);
-                    return 1;
+                    printf("%d\n",g->distancias[inicio][ v_atual.v]);
+                    g->antecessor[inicio].ultimo = v_atual.v;
+                    return;
                 }
             }
             for( no* cur = g->adj[v_atual.v].next ; cur != NULL ; cur = cur->next){
                 v_adj.v                 = cur->v;
                 v_adj.d                 = cur->custo;
                 custo                   = cur->custo;
-                //printf("| atual:%d ajd %d| ",v_atual.v,v_adj.v);
-                if( dist[v_adj.v] > dist[v_atual.v] + custo ){
-                    dist[v_adj.v]       = dist[v_atual.v]  + custo;
-                    v_adj.d             = dist[v_adj.v];
-                    Insert_heap(heap,v_adj);
-                    anterior[v_adj.v]   = v_atual.v;
-                    //printf("V:%d Vajd:%d AntV:%d AntAdj:%d\n",v_atual.v,v_adj.v,anterior[v_atual.v],anterior[v_adj.v] ); 
+                if( g->distancias[inicio][v_adj.v] > g->distancias[inicio][v_atual.v] + custo  ){
+                    g->distancias[inicio][v_adj.v]                  = g->distancias[inicio][v_atual.v]  + custo;
+                    v_adj.d                                         = g->distancias[inicio][v_adj.v];
+                    g->antecessor[inicio].caminhos[v_adj.v]   = v_atual.v;
+                    Insert_heap(heaps,v_adj);
                 } 
             }
         }
-        //show_heap(heap);
     }  
     if( comparador != 0){
         printf("OOS\n");
-        return 0;
     }
 }
-void testarHeap(heap* h){
-    vertis t;
-    for( int i = 0 ; i < 50 ; i++){
-        t.v = i;
-        t.d = i;
-        Insert_heap(h,t);
-    }
-    show_heap(h);
-    
-}
-/*
+
 int main(){
 
-    graf* g = criar_grap(   g, 5);
-    heap* h = criar_heap(   5);
-    add_arest(g, 0,3,4,1 );
-    add_arest(g, 1,0,2,1 );
-    add_arest(g, 1,2,3,1 );
-    add_arest(g, 1,3,5,1 );
-    add_arest(g, 2,3,1,1 );
-    add_arest(g, 3,4,1,1 );
-    add_arest(g, 4,2,1,1 );
-    show_grafro(g);
-    dikst(g,h,1,4);
-    return 0;
-}
-*/
-int main(){
-
-    register int i,j;
-    int V, E, B, X, Y, D, W, T, M, I, Q, aux1,aux2;
+    int V, E, B, X, Y, D, W, T, M, I, Q, comparador, cursor;
     char Op[4];
     scanf(" %d %d %d ",&V, &E, &B);
-    //printf("%d %d %d\n",V,E,B);
-    graf* g = criar_grap(   g, V);
-    for( i = 0; i < E ; i++){
+    graf* g = criar_grap(V);
+    for( register int i = 0; i < E ; i++){
         scanf(" %d %d %d %d ",&X, &Y, &D, &W);
-        //printf("%d %d %d %d\n",X, Y, D, W);
         add_arest(g, X, Y, D, W);
         add_arest(g, Y, X, D, W);
     }
-    //show_grafro(g);
-    g->estoque = (int**)malloc(V*sizeof(int*));
-
-    for( i = 0; i < V ; i++){
-
-        g->estoque[i] = (int*)malloc(B*sizeof(int));
-
-        for (int j = 0; j < B; j++)
-        {
+    g->estoque                  = (int**)malloc(V*sizeof(int*));
+    g->q_estoque_vert           = (int*)malloc(V*sizeof(int));
+    for( register int i = 0; i < V ; i++){
+        g->estoque[i]           = (int*)malloc(B*sizeof(int));
+        for ( register int j = 0; j < B; j++){
             scanf(" %d ",&Q);
-            //printf("%d ",aux1);
-            g->estoque[i][j] = Q;
+            g->estoque[i][j]    = Q;
+            g->q_estoque_vert[i]+= Q;
         }
     }
-
     do{
         scanf(" %s",Op);
         if( strcmp(Op, "ORD") == 0 ){
             scanf(" %d %d ",&T, &M);
-            //printf("ORD %d %d",T,M);
-            node* pedidos = cria_node();
-            node* aux = pedidos;
-            for( int  i = 0 ; i < M; i++){
+            node* pedidos       = cria_lista(M);
+            int q_produtos      = 0;
+            for( register int i = 0 ; i < M; i++){
                 scanf(" %d %d ",&I, &Q);
-                //printf(" %d %d",I,Q);
-                aux->i = I;
-                aux->q = Q;
-                aux->next = cria_node();
-                aux = aux->next;
+                pedidos[i].i    = I;
+                pedidos[i].q    = Q;
+                q_produtos     += Q;
             }
-            /*printf("\n");
-            aux = pedidos;
-            for( int i = 0 ; i < M; i++){
-                printf("%d %d ",aux->i,aux->q);
-                aux = aux->next;
-            }
-            printf("\n");
-            */
-            dikst(g,T,M,pedidos);
-            free(pedidos);
-
+            if( g->calculados[T] == 0 || g->atualizado[T] == 1 ){
+                dikst(g,T,M,pedidos,q_produtos);
+                free(pedidos);
+                g->calculados[T] = 1;
+                if( g->atualizado[T] == 1){
+                    g->atualizado[T] = 0;
+                }
+            }else {
+                // laço para percorrer menor caminho
+                    comparador  = M;
+                    if( g->q_estoque_vert[T] >= q_produtos){
+                        for( register int j = 0 ; j < M && g->estoque[  cursor  ][  pedidos[j].i    ] >= pedidos[j].q && cursor > 0  ; j++){
+                            comparador--;
+                        }
+                    }
+                    if( comparador == 0){
+                        for( register int j = 0 ; j < M && g->estoque[   cursor   ][  pedidos[j].i    ] >= pedidos[j].q && cursor > 0 ; j++){
+                            g->estoque[   cursor   ][  pedidos[j].i    ] -= pedidos[j].q;
+                        }
+                        g->q_estoque_vert[ T ] -= q_produtos;
+                        //cursor = g->antecessor[T].ultimo;
+                        printf("%d ",cursor);
+                        
+                        //cursor = g->antecessor[T].ultimo;
+                        //cursor = g->antecessor[T].caminhos[cursor];
+                        printf("---->%d\n",g->distancias[T][ cursor ]);
+                        break;
+                    } 
+                }
+                if( comparador > 0){
+                    dikst(g,T,M,pedidos,q_produtos);
+                    free(pedidos);
+                }  
             
         }else if( strcmp(Op, "UPD") == 0 ){
             scanf(" %d %d %d ",&X, &Y, &W);
             for( no* cur = g->adj[X].next ; cur != NULL ; cur = cur->next ){
                 if( cur->v == Y){
-                    cur->w = W;
-                    cur->custo = (     cur->d*(  100 +   W   )   )/100;
+                    cur->w      = W;
+                    cur->custo  = (     cur->d*(  100 +   W   )   )/100;
                     break;
                 }
             }
-            for( no* cur = g->adj[Y].next ; cur != NULL ; cur = cur->next ){
-                if( cur->v == X){
-                    cur->w = W;
-                    cur->custo = (     cur->d*(  100 +   W   )   )/100;
+            for( no* cur2 = g->adj[Y].next ; cur2 != NULL ; cur2 = cur2->next ){
+                if( cur2->v == X){
+                    cur2->w     = W;
+                    cur2->custo = (     cur2->d*(  100 +   W   )   )/100;
                     break;
                 }
             }
+            g->atualizado[X] = 1;
+            g->atualizado[Y] = 1;
         }else if( strcmp(Op, "STK") == 0 ){
             scanf(" %d %d %d ",&X, &I, &Q);
-            g->estoque[X][I] = g->estoque[X][I] + Q;
+            g->estoque[X][I]   += Q;
         }
     }while( strcmp(Op, "END") != 0 );
     return 0;
